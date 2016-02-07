@@ -289,6 +289,19 @@ sub sendsnpp ($$){
     }
 }
 
+sub sendslack ($$) {
+  my $channel = shift;
+  my $msg = shift;
+
+  my $client = WebService::Slack::IncomingWebHook->new(
+    webhook_url => $cfg->{General}{slackwebhook},
+  );
+  my $client->post(
+    text        => $msg,
+    channel     => $channel,
+  );
+}
+
 sub min ($$) {
         my ($a, $b) = @_;
         return $a < $b ? $a : $b;
@@ -1906,6 +1919,14 @@ $loss
 $rtt
 SNPPALERT
                     } 
+                    elsif ( $addr =~ /^slack:(.+)/ ) {
+                                    sendslack $1, <<SLACKALERT;
+$alert->{comment}
+$_ $what on $line
+$loss
+$rtt
+SLACKALERT
+                    } 
                     else {
                                     push @to, $addr;
                     }
@@ -2301,7 +2322,7 @@ of the parent node, circular dependencies are not possible.
 DOC
            },
 
-           alertee => { _re => '(\|.+|.+@\S+|snpp:)',
+           alertee => { _re => '(\|.+|.+@\S+|snpp:|slack:)',
                         _re_error => 'the alertee must be an email address here',
                         _doc => <<DOC },
 If you want to have alerts for this target and all targets below it go to a particular address
@@ -2548,7 +2569,7 @@ General configuration values valid for the whole SmokePing setup.
 DOC
          _vars =>
          [ qw(owner imgcache imgurl datadir dyndir pagedir piddir sendmail offset
-              smokemail cgiurl mailhost snpphost contact display_name
+              smokemail cgiurl mailhost snpphost slackwebhook contact display_name
               syslogfacility syslogpriority concurrentprobes changeprocessnames tmail
               changecgiprogramname linkstyle precreateperms ) ],
 
@@ -2610,6 +2631,15 @@ If you have a SNPP (Simple Network Pager Protocol) server at hand, you can have 
 sent there too. Use the syntax B<snpp:someaddress> to use a snpp address in any place where you can use a mail address otherwhise.
 DOC
           _sub => sub { require Net::SNPP ||return "ERROR: loading Net::SNPP"; return undef; }
+         },
+
+         slackwebhook => 
+         {
+          _doc => <<DOC,
+Slack Chat Webhook URL (https://slack.com/)
+Send notifications to Slack channels, use the use the syntax B<slack:channel> in any place where you can use a mail address.
+DOC
+          _sub => sub { require WebService::Slack::IncomingWebHook ||return "ERROR: loading WebService::Slack::IncomingWebHook"; return undef; }
          },
 
          contact  => 
@@ -3343,7 +3373,7 @@ whenever an alert matches, using the following 5 arguments
 B<name-of-alert>, B<target>, B<loss-pattern>, B<rtt-pattern>, B<hostname>.
 You can also provide a comma separated list of addresses and programs.
 DOC
-                        _re => '(\|.+|.+@\S+|snpp:)',
+                        _re => '(\|.+|.+@\S+|snpp:|slack:)',
                         _re_error => 'put an email address or the name of a program here',
                       },
              from => { _doc => 'who should alerts appear to be coming from ?',
@@ -3404,7 +3434,7 @@ DOC
                   _inherited => [ qw(edgetrigger mailtemplate) ],
                   _mandatory => [ qw(type pattern comment) ],
                   to => { _doc => 'Similar to the "to" parameter on the top-level except that  it will only be used IN ADDITION to the value of the toplevel parameter. Same rules apply.',
-                        _re => '(\|.+|.+@\S+|snpp:)',
+                        _re => '(\|.+|.+@\S+|snpp:|slack:)',
                         _re_error => 'put an email address or the name of a program here',
                           },
                   
